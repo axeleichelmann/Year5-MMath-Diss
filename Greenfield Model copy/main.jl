@@ -48,5 +48,3 @@ if alg.al!=0
 
 end;
 include("OREIA3_2017/rp_invest.jl")
-
-asdf

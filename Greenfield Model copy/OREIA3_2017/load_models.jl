@@ -28,7 +28,7 @@ function SP!(m::JuMP.Model,ps,pp)::JuMP.Model
 
     # - Line / Bus variables
     @variable(m, pL[ps.L,ps.H]);           #power flow into line l [GW]
-    @variable(m, pHL[ps.HL,ps.H]);         #power flow in heat line hl
+    @variable(m, pHL[ps.HL,ps.H]);         #power flow into heat line hl
     @variable(m, delta[ps.B,ps.H]);        #voltage angle [rad]
 
 
