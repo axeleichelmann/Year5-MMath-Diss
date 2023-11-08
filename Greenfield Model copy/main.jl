@@ -44,7 +44,7 @@ if alg.al!=0
 ############### OUTPUT PRINTING FUNCTIONS
     include("functions/load_printfunctions.jl");      # Has the functions to print out the resultss
 
-    solve_Benders!(B,S,N);                            # Starts solving the problem
+    mU = solve_Benders!(B,S,N);                            # Starts solving the problem
 
 end;
 include("OREIA3_2017/rp_invest.jl")
