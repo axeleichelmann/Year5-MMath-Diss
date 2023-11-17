@@ -44,7 +44,11 @@ if alg.al!=0
 ############### OUTPUT PRINTING FUNCTIONS
     include("functions/load_printfunctions.jl");      # Has the functions to print out the resultss
 
-    mU = solve_Benders!(B,S,N);                            # Starts solving the problem
+    B, S, N = solve_Benders!(B,S,N);                            # Starts solving the problem
 
 end;
 include("OREIA3_2017/rp_invest.jl")
+
+sum(value.(S.ex.m[:pHShedP]["House1",:]).data)
+
+B.temp.x # get final investment values --- can also use S.temp.x

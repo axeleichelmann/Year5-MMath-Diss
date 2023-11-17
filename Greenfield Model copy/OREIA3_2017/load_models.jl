@@ -21,8 +21,8 @@ function SP!(m::JuMP.Model,ps,pp)::JuMP.Model
     @variable(m,  qH[ps.HnS,ps.H]>= 0);        #ENERGY IN THE HEAT STORE [GWh]
     @variable(m,  qHS[ps.HOUSES,ps.H]>= 0);      #ENERGY IN THE HOUSES
     @variable(m,  tInt[ps.HOUSES,ps.H]);        #TEMP IN THE HOUSES [GWh]
-    @variable(m, pHShedP[ps.HOUSES,ps.H]>=0);      #Power flexibility for heatstores positive (to keep it always feasible)
-    @variable(m, pHShedN[ps.HOUSES,ps.H]>=0);       #Power flexibility for heatstores neg (to keep it always feasible)
+    @variable(m, pHShedP[union(ps.HOUSES,ps.HnS),ps.H]>=0);      #Power flexibility for heatstores positive (to keep it always feasible)
+    @variable(m, pHShedN[union(ps.HOUSES,ps.HnS),ps.H]>=0);       #Power flexibility for heatstores neg (to keep it always feasible)
 
     # - Line / Bus variables
     @variable(m, pL[ps.L,ps.H]);           #power flow into line l [GW]
@@ -67,7 +67,7 @@ function SP!(m::JuMP.Model,ps,pp)::JuMP.Model
     ##      SHED / CURTAIL COSTS  - PER PERIOD = Load shed + Generation curtailment [T£/period]
     @expression(m,Sh_Cost[h in ps.H], sum(gShed[r,h]*(pp.ccurt[r]) for r in ps.R) + 
                                        sum(dShed[d,h]*pp.cs[d] for d in ps.D) +
-                                       sum((pHShedP[hs,h]+pHShedN[hs,h])*pp.ccurt[hs] for hs in ps.HOUSES)
+                                       sum((pHShedP[hs,h]+pHShedN[hs,h])*pp.ccurt[hs] for hs in union(ps.HOUSES,ps.HnS))
                                        );
 
     @expression(m, c0,sum(sc[h]*(Var_Cost[h]+Sh_Cost[h]) for h in ps.H))
@@ -102,11 +102,11 @@ function SP!(m::JuMP.Model,ps,pp)::JuMP.Model
 
     # */ ------ Heat Store & House Energy balance Constraint ------ /* #
     # Heat balance for Heat Stores
-    @constraint(m, c17[hns=ps.HnS,h=ps.H], qH[hns,next(h,pp.st,pp.ln)]== qH[hns,h] + pp.ts[HS[h]]*(pp.ploss[hns]*(pp.text[hns][h]-qH[hns,h]/pp.qmass[hns])
+    @constraint(m, c17[hns=ps.HnS,h=ps.H], qH[hns,next(h,pp.st,pp.ln)]== qH[hns,h] + pHShedP[hns,h] - pHShedN[hns,h] +  pp.ts[HS[h]]*(pp.ploss[hns]*(pp.text[hns][h]-qH[hns,h]/pp.qmass[hns])
                                             + sum(pHL[hl,h] for hl in ps.HL if pp.hto[hl]==hns) - sum(pHL[hl,h] for hl in ps.HL if pp.hfm[hl]==hns))); # Need to make this conditional on HnS being built
     
     # Heat balance for Houses
-    @constraint(m, c18[hs=ps.HOUSES,h=ps.H], qHS[hs,next(h,pp.st,pp.ln)]== qHS[hs,h] + pp.ts[HS[h]]*(pHShedP[hs,h] - pHShedN[hs,h] + pp.ploss[hs]*(pp.text[hs][h]-tInt[hs,h])
+    @constraint(m, c18[hs=ps.HOUSES,h=ps.H], qHS[hs,next(h,pp.st,pp.ln)]== qHS[hs,h] + pHShedP[hs,h] - pHShedN[hs,h] + pp.ts[HS[h]]*(pp.ploss[hs]*(pp.text[hs][h]-tInt[hs,h])
                                             + sum(pHL[hl,h] for hl in ps.HL if pp.hto[hl]==hs) - sum(pHL[hl,h] for hl in ps.HL if pp.hfm[hl]==hs)));
 
 

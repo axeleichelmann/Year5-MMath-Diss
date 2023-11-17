@@ -1,11 +1,50 @@
-## Display Results of Investment Model
-header=reshape(vcat(["Node"],mU[:pN].axes[2]),1,:);
-cols=hcat(mU[:pN].axes[1],value.(mU[:pN]).data);
-Full=vcat(header,cols)
-CSV.write("$path/Optimal_investments.csv",Tables.table(Full),header=false)
-Full
+# ## Display Results of Investment Model
+# header=reshape(vcat(["Node"],mU[:pN].axes[2]),1,:);
+# cols=hcat(mU[:pN].axes[1],value.(mU[:pN]).data);
+# Full=vcat(header,cols)
+# CSV.write("$path/Optimal_investments.csv",Tables.table(Full),header=false)
+# Full
 
-#=
+
+# CODE TO DISPLAY RESULTS FOR ALG == 1
+
+## Display Results of Operational Model for 1 investment node
+
+## OPERATIONAL DICTIONARY
+d2e_op = Dict("House & Heat Store Shed" => ("pHShedP","value","pHShedN","value"),
+              "Heat Store Energy" => ("qH","value"),
+              "House Temp" => ("tInt","value"),
+              "Heat line Transfer" => ("pHL", "value"))
+
+mU = S.ex.m
+
+XLSX.openxlsx("OperationalResultsAlg1.xlsx",mode="w") do xf
+    sheet=xf[1]
+    XLSX.rename!(sheet, "blank")
+    for k in collect(keys(d2e_op))
+        XLSX.sheetnames(xf)[1]=="blank" ? XLSX.rename!(sheet,"$k") : XLSX.addsheet!(xf,"$k")
+        sheet=xf[XLSX.sheetcount(xf)]
+        mtx_all = DataFrame()
+        for i in 2:2:length(d2e_op[k])
+            if d2e_op[k][i] == "value"
+                mtx_new = DataFrame(value.(mU[Symbol(d2e_op[k][i-1])]).data[:,:]',:auto)
+                names = ["$(d)_$(d2e_op[k][i-1])_value" for d in mU[Symbol(d2e_op[k][i-1])].axes[1]]
+                rename!(mtx_new,names)
+            elseif d2e_op[k][i] == "dual"
+                mtx_new = DataFrame(dual.(mU[Symbol(d2e_op[k][i-1])]).data[:,:]',:auto)
+                names = ["$(d)_$(d2e_op[k][i-1])_dual" for d in mU[Symbol(d2e_op[k][i-1])].axes[1]]
+                rename!(mtx_new,names)
+            end
+            mtx_all = hcat(mtx_new,mtx_all)
+        end
+        tdf=DataFrame("Period"=>1:length(ps.H))
+        XLSX.writetable!(sheet,hcat(tdf,mtx_all),anchor_cell=XLSX.CellRef("A1"))
+    end
+end
+
+
+
+#=  CODE TO DISPLAY RESULTS FOR ALG == 0
 
 ## Display Results of Investment Model for Node 1
 header=reshape(vcat(["Investment Index","Investment Name"],mU[:pN].axes[2]),1,:);
@@ -27,7 +66,7 @@ power_output_wind=vcat(["Power Output (MWh)"],value.(mU[:pR]["N1","Wind",:]).dat
 wind_full = hcat(time_steps_wind,power_output_wind)
 wind_full
 
-=#
+
 
 # A=LowerBoundRef.(mU[:pC]);
 
@@ -121,3 +160,5 @@ wind_full
 #                 #XLSX.writetable!(sheet,mtx,anchor_cell=XLSX.CellRef("B1"))
 #             end
 #     end
+
+=#
