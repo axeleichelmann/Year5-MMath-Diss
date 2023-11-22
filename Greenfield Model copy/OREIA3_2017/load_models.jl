@@ -6,10 +6,10 @@ function SP!(m::JuMP.Model,ps,pp)::JuMP.Model
 
     # */ -- VARIABLES ---------------------------------------------- /* #
     # - Thermal generation variables
-    @variable(m, pG[ps.T,ps.H] >= 0)      #power output of thermal technology for each period
+    @variable(m, pG[ps.T,ps.H] >= 0);      #power output of thermal technology for each period
 
     # - Renewable generation variables
-    @variable(m, pR[ps.R,ps.H] >= 0)      #power output of renewable technology for each period
+    @variable(m, pR[ps.R,ps.H] >= 0);      #power output of renewable technology for each period
 
     # - Electric store variables
     @variable(m, pS_in[ps.ES,ps.H]>= 0);      #power charging of storage
@@ -26,7 +26,7 @@ function SP!(m::JuMP.Model,ps,pp)::JuMP.Model
 
     # - Line / Bus variables
     @variable(m, pL[ps.L,ps.H]);           #power flow into line l [GW]
-    @variable(m, pHL[ps.HL,ps.H]);         #power flow into heat line hl
+    @variable(m, pHL[ps.HL,ps.H]>=0);         #power flow into heat line hl
     @variable(m, delta[ps.B,ps.H]);        #voltage angle [rad]
 
 
@@ -41,11 +41,9 @@ function SP!(m::JuMP.Model,ps,pp)::JuMP.Model
     @variable(m,sub[ps.ES]);            #upper bounds for stores (electric) - power
     @variable(m,eub[ps.EnS]);            #upper bounds for stores (electric) - energy
     @variable(m,hub[ps.HP]);            #upper bounds for heat pumps - power
-    @variable(m,heub[ps.HnS]);           #Upper bound for energy in TES
-    @variable(m,helb[ps.HnS] == 0);          #Lower bound for energy in TES
+    @variable(m, QMass[ps.HnS]);           #QMass of TES
     @variable(m,lub[ps.L]);             #thermal limits on lines
-    @variable(m,hlub[ps.HL]);           #thermal upper bound on Heat Lines
-    @variable(m,hllb[ps.HL]==0);        #thermal lower bound on Heat Lines
+    @variable(m,hlub[ps.HL]>= 0);           #thermal upper bound on Heat Lines
 
 
     @variable(m,co2l);                  #CO2 level (passed from MP)
@@ -70,7 +68,7 @@ function SP!(m::JuMP.Model,ps,pp)::JuMP.Model
                                        sum((pHShedP[hs,h]+pHShedN[hs,h])*pp.ccurt[hs] for hs in union(ps.HOUSES,ps.HnS))
                                        );
 
-    @expression(m, c0,sum(sc[h]*(Var_Cost[h]+Sh_Cost[h]) for h in ps.H))
+    @expression(m, c0,sum(sc[h]*(Var_Cost[h]+Sh_Cost[h]) for h in ps.H));
 
 
     # - Proper system constraints -
@@ -82,10 +80,6 @@ function SP!(m::JuMP.Model,ps,pp)::JuMP.Model
     @constraint(m, c03[b=ps.ES, h=ps.H], pS_in[b,h]<=sub[b]);   # charging power limits
     @constraint(m, c04[b=ps.ES, h=ps.H], pS_out[b,h]<=sub[b]);   # discharging power limits for electric store
 
-    @constraint(m, c05[b=ps.HnS,h=ps.H], qH[b,h] <= heub[b]);   # Upper bound for energy in TES
-    @constraint(m, c10[b=ps.HnS,h=ps.H], qH[b,h] >= helb[b]);   # Lower bound for energy in TES
-    @constraint(m, c06[b=ps.HP, h=ps.H], pH_heat[b,h]<=hub[b]);   # charging power limits
-
     @constraint(m, c08[b=ps.EnS, h=ps.H], qB[b,next(h,pp.st,pp.ln)] - qB[b,h] == pp.ts[HS[h]]*(pp.eta[pp.lp[b]]*pS_in[pp.lp[b],h] - pS_out[pp.lp[b],h])); # storage energy inventory for electric
 
     @constraint(m,c09[r=ps.R, h=ps.H],pR[r,h]==rub[r]/pp.hc[r]*pp.pr[r][h]);
@@ -96,14 +90,20 @@ function SP!(m::JuMP.Model,ps,pp)::JuMP.Model
     @constraint(m, c14[hs=ps.HOUSES, h=ps.H], tInt[hs,h] >= pp.tmin[hs]);
     @constraint(m, c15[hs=ps.HOUSES, h=ps.H], tInt[hs,h] <= pp.tmax[hs]);
 
+    @constraint(m, c05[b=ps.HnS,h=ps.H], qH[b,h] <= QMass[b]*(pp.tmax[b]));   # Upper bound for energy in TES
+    @constraint(m, c10[b=ps.HnS,h=ps.H], qH[b,h] >= QMass[b]*(pp.tmin[b]));   # Lower bound for energy in TES
+    @constraint(m, c06[b=ps.HP, h=ps.H], pH_heat[b,h]<=hub[b]);   # charging power limits
+
     # # */ ------ Heat Node Balance Constraint ------ /* #
     @constraint(m, c16[hn=ps.HN, h=ps.H], 
         sum(pH_heat[hp,h]*pp.eta[hp] for hp in ps.HP if pp.hDeliv[hp]==hn) == sum(pHL[hl,h] for hl in ps.HL if pp.hfm[hl]==hn));
 
     # */ ------ Heat Store & House Energy balance Constraint ------ /* #
     # Heat balance for Heat Stores
-    @constraint(m, c17[hns=ps.HnS,h=ps.H], qH[hns,next(h,pp.st,pp.ln)]== qH[hns,h] + pHShedP[hns,h] - pHShedN[hns,h] +  pp.ts[HS[h]]*(pp.ploss[hns]*(pp.text[hns][h]-qH[hns,h]/pp.qmass[hns])
-                                            + sum(pHL[hl,h] for hl in ps.HL if pp.hto[hl]==hns) - sum(pHL[hl,h] for hl in ps.HL if pp.hfm[hl]==hns))); # Need to make this conditional on HnS being built
+    @expression(m, PLoss[hns in ps.HnS], pp.lambda[hns]*QMass[hns]);
+    @constraint(m, c72[hns=ps.HnS], qH[hns,1] == QMass[hns]*pp.tmin[hns]);  # Set initial temperature of heat store to min temp
+    @constraint(m, c17[hns=ps.HnS,h=ps.H], qH[hns,next(h,pp.st,pp.ln)] == qH[hns,h] + pHShedP[hns,h] - pHShedN[hns,h] +  pp.ts[HS[h]]*(pp.text[hns][h]*PLoss[hns] - pp.lambda[hns]*qH[hns,h]
+                                            + sum(pHL[hl,h] for hl in ps.HL if pp.hto[hl]==hns) - sum(pHL[hl,h] for hl in ps.HL if pp.hfm[hl]==hns)));
     
     # Heat balance for Houses
     @constraint(m, c18[hs=ps.HOUSES,h=ps.H], qHS[hs,next(h,pp.st,pp.ln)]== qHS[hs,h] + pHShedP[hs,h] - pHShedN[hs,h] + pp.ts[HS[h]]*(pp.ploss[hs]*(pp.text[hs][h]-tInt[hs,h])
@@ -113,7 +113,7 @@ function SP!(m::JuMP.Model,ps,pp)::JuMP.Model
     # */ -------------------- KCL ----------------------- /* #
     @constraint(m, c19[b=ps.B,h=ps.H], sum(pG[g,h] for g in ps.T_B[b]) + sum(pR[r,h] for r in ps.R_B[b])  +
     sum(pL[l,h] for l in ps.L_to[b]) - sum(pL[l,h] for l in ps.L_fm[b]) + sum(dShed[d,h] for d in ps.D_B[b]) + sum(pS_out[b,h] for b in ps.ES_B[b])
-     == sdm*sum(pp.pd[d][h] for d in ps.D_B[b]) + sum(gShed[r,h] for r in ps.R_B[b]) + sum(pS_in[s,h] for s in ps.ES_B[b]) + sum(pH_heat[hp,h] for hp in ps.HP_B[b]))
+     == sdm*sum(pp.pd[d][h] for d in ps.D_B[b]) + sum(gShed[r,h] for r in ps.R_B[b]) + sum(pS_in[s,h] for s in ps.ES_B[b]) + sum(pH_heat[hp,h] for hp in ps.HP_B[b]));
 
     # */ -------------------- KVL ----------------------- /* #
     @constraint(m,c20[l=ps.L,h=ps.H],pL[l,h]==1/pp.imp[l]*(delta[pp.to[l],h]-delta[pp.fm[l],h]));
@@ -124,11 +124,10 @@ function SP!(m::JuMP.Model,ps,pp)::JuMP.Model
     @constraint(m, c22[l=ps.L,h=ps.H], pL[l,h] >= -lub[l]);
 
     # */ -------------- HEAT LINE LIMITS ---------------- /* #
-    @constraint(m, c23[hl=ps.HL,h=ps.H], pHL[hl,h] <=  hlub[hl]);
-    @constraint(m, c24[hl=ps.HL,h=ps.H], pHL[hl,h] >=  hllb[hl]);    
+    @constraint(m, c23[hl=ps.HL,h=ps.H], pHL[hl,h] <=  hlub[hl]);   
 
     # */ ----------------------- CO2 budget ------------------------ /* #
-    @constraint(m, co2gen==sum(sum(pp.eg[g]/pp.eta[g]*pG[g,h] for g in ps.T)*sc[h] for h in ps.H))      # compute cost dependent on CO₂ level
+    @constraint(m, co2gen==sum(sum(pp.eg[g]/pp.eta[g]*pG[g,h] for g in ps.T)*sc[h] for h in ps.H));  # compute cost dependent on CO₂ level
     @constraint(m, c25, co2gen<=co2l);
 
 

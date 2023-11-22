@@ -47,8 +47,12 @@ if alg.al!=0
     B, S, N = solve_Benders!(B,S,N);                            # Starts solving the problem
 
 end;
+
+
+sum(sum(value.(S.ex.m[:pHShedP]["$(hs)",:]).data) for hs in union(ps.HnS,ps.HOUSES))
 include("OREIA3_2017/rp_invest.jl")
 
-sum(value.(S.ex.m[:pHShedP]["House1",:]).data)
+
+B.hist.T[B.hist.k,3]
 
 B.temp.x # get final investment values --- can also use S.temp.x

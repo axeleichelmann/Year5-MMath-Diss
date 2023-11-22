@@ -996,39 +996,40 @@ function step_f!(b::Union{B1_type,B2_type},n::Union{N1_type,N2_type})
 
   #push!(n.δ,b.temp.Δ)
   #push!(n.θc,deepcopy(θ))
+  if b.temp.Δ > b.data.δ
+    if b.data.ac==0 # if avoid adding cuts
+        for i in 1:b.data.unc.ni
+            @constraint(b.rmp.m,b.rmp.m[:beta][b.data.unc.i2n[i]] >= θ[i]+λ[:,i]'*(b.rmp.m[:x][:,i].-b.temp.x[:,i])) # add constraints βᵢ >= θᵢ + λᵢᵀ(𝑥ᵢ-xᵢ) to the relaxed master problem
+            if b.data.stab==1
+                @constraint(b.lmp.m,b.lmp.m[:beta][b.data.unc.i2n[i]] >= θ[i]+λ[:,i]'*(b.lmp.m[:x][:,i].-b.temp.x[:,i])) # add constraints βᵢ >= θᵢ + λᵢᵀ(𝑥ᵢ-xᵢ) to the relaxed master problem
+            end
+        end
+    else
+        push!(n.λc,deepcopy(λ))
+        push!(n.hc,deepcopy(θ.-[λ[:,i]'*b.temp.x[:,i] for i in 1:b.data.unc.ni]));
+        push!(n.sc,[vcat(θ[i]-λ[:,i]'*b.temp.x[:,i],λ[:,i])'*n.rv for i in 1:b.data.unc.ni])
 
-  if b.data.ac==0 # if avoid adding cuts
-      for i in 1:b.data.unc.ni
-          @constraint(b.rmp.m,b.rmp.m[:beta][b.data.unc.i2n[i]] >= θ[i]+λ[:,i]'*(b.rmp.m[:x][:,i].-b.temp.x[:,i])) # add constraints βᵢ >= θᵢ + λᵢᵀ(𝑥ᵢ-xᵢ) to the relaxed master problem
-          if b.data.stab==1
-              @constraint(b.lmp.m,b.lmp.m[:beta][b.data.unc.i2n[i]] >= θ[i]+λ[:,i]'*(b.lmp.m[:x][:,i].-b.temp.x[:,i])) # add constraints βᵢ >= θᵢ + λᵢᵀ(𝑥ᵢ-xᵢ) to the relaxed master problem
-          end
-      end
-  else
-      push!(n.λc,deepcopy(λ))
-      push!(n.hc,deepcopy(θ.-[λ[:,i]'*b.temp.x[:,i] for i in 1:b.data.unc.ni]));
-      push!(n.sc,[vcat(θ[i]-λ[:,i]'*b.temp.x[:,i],λ[:,i])'*n.rv for i in 1:b.data.unc.ni])
-
-      newC=0;
-      for i in 1:b.data.unc.ni
-          avoid=false
-          for k in 1:b.hist.k-1
-              if abs(n.sc[b.hist.k][i] - n.sc[k][i])<=1e-8
-                 if norm(vcat(θ[i]-λ[:,i]'*b.temp.x[:,i],λ[:,i])-vcat(n.hc[k][i],n.λc[k][:,i]))<=1e-8
-                     avoid=true
-                     break
-                 end
-             end
-          end
-          if avoid==false
-              @constraint(b.rmp.m,b.rmp.m[:beta][b.data.unc.i2n[i]] >= θ[i]+λ[:,i]'*(b.rmp.m[:x][:,i].-b.temp.x[:,i])) # add constraints βᵢ >= θᵢ + λᵢᵀ(𝑥ᵢ-xᵢ) to the relaxed master problem
-              #set_name(all_constraints(b.rmp.m,AffExpr,MOI.GreaterThan{Float64})[end],"Cut_$(b.hist.k)_$i");
-              newC+=1;
-              if b.data.stab==1
-                  @constraint(b.lmp.m,b.lmp.m[:beta][b.data.unc.i2n[i]] >= θ[i]+λ[:,i]'*(b.lmp.m[:x][:,i].-b.temp.x[:,i])) # add constraints βᵢ >= θᵢ + λᵢᵀ(𝑥ᵢ-xᵢ) to the relaxed master problem
-              end
-          end
-      end
+        newC=0;
+        for i in 1:b.data.unc.ni
+            avoid=false
+            for k in 1:b.hist.k-1
+                if abs(n.sc[b.hist.k][i] - n.sc[k][i])<=1e-8
+                    if norm(vcat(θ[i]-λ[:,i]'*b.temp.x[:,i],λ[:,i])-vcat(n.hc[k][i],n.λc[k][:,i]))<=1e-8
+                        avoid=true
+                        break
+                    end
+                end
+            end
+            if avoid==false
+                @constraint(b.rmp.m,b.rmp.m[:beta][b.data.unc.i2n[i]] >= θ[i]+λ[:,i]'*(b.rmp.m[:x][:,i].-b.temp.x[:,i])) # add constraints βᵢ >= θᵢ + λᵢᵀ(𝑥ᵢ-xᵢ) to the relaxed master problem
+                #set_name(all_constraints(b.rmp.m,AffExpr,MOI.GreaterThan{Float64})[end],"Cut_$(b.hist.k)_$i");
+                newC+=1;
+                if b.data.stab==1
+                    @constraint(b.lmp.m,b.lmp.m[:beta][b.data.unc.i2n[i]] >= θ[i]+λ[:,i]'*(b.lmp.m[:x][:,i].-b.temp.x[:,i])) # add constraints βᵢ >= θᵢ + λᵢᵀ(𝑥ᵢ-xᵢ) to the relaxed master problem
+                end
+            end
+        end
+    end
   end
 end
 
