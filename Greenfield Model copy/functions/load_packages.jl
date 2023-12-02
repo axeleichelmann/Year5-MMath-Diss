@@ -15,5 +15,6 @@ using JLD2
 using FileIO
 using PlotlyJS
 using LinearAlgebra
+using Plots
 
 #gurobi_env = @suppress Gurobi.Env()

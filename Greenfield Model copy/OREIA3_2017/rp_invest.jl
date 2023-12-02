@@ -9,26 +9,6 @@
 # CODE TO DISPLAY RESULTS FOR ALG == 1
 
 ## Display Results of Operational Model for 1 investment node
-
-# ## Construct table of total capacity NOT newly invested amount
-# HNS_investments = Dict([i => value.(S.ex.m[:QMass][i]) for i in ps.HnS]);
-# HL_investments = Dict([i => value.(S.ex.m[:hlub][i]) for i in ps.HL]);
-# T_investments = Dict([i => value.(S.ex.m[:pub][i]) for i in ps.T]);
-# R_investments = Dict([i => value.(S.ex.m[:rub][i]) for i in ps.R]);
-# ES_investments = Dict([i => value.(S.ex.m[:sub][i]) for i in ps.ES]);
-# EnS_investments = Dict([i => value.(S.ex.m[:eub][i]) for i in ps.EnS]);
-# L_investments = Dict([i => value.(S.ex.m[:lub][i]) for i in ps.L]);
-# HP_investments = Dict([i => value.(S.ex.m[:hub][i]) for i in ps.HP]);
-# all_investments = merge(L_investments, 
-#                         EnS_investments, 
-#                         ES_investments, 
-#                         R_investments, 
-#                         T_investments, 
-#                         HL_investments, 
-#                         HNS_investments,
-#                         HP_investments);
-# all_investments_df = DataFrame(all_investments)
-
 # N1 Newly invested capacity
 pN_vals = DataFrame(hcat(axes(B.rmp.m[:pN])[1], 
                     value.(B.rmp.m[:pN]).data, 
@@ -37,10 +17,11 @@ pN_vals = DataFrame(hcat(axes(B.rmp.m[:pN])[1],
                     ["Investment","pN","CAPEX (GBP/MW(h)(/*C))", "FixOM"])
 
 ## OPERATIONAL DICTIONARY
-d2e_op = Dict("House & Heat Store Shed" => ("pHShedP","value","pHShedN","value"),
+d2e_op = Dict("House & Heat Store Shed" => ("qHShedP","value","qHShedN","value"),
               "Heat Store Energy" => ("qH","value"),
               "House Temp" => ("tInt","value"),
-              "Heat line Transfer" => ("pHL", "value"))
+              "Heat line Transfer" => ("pHL", "value"),
+              "Bus LMPs" => ("c19","dual"))
 
 mU = S.ex.m
 

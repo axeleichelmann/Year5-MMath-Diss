@@ -48,11 +48,16 @@ if alg.al!=0
 
 end;
 
+###### CHECK THAT THE SHEDS ARE ALL 0 
+sum(sum(value.(S.ex.m[:qHShedP]["$(hs)",:]).data) for hs in union(ps.HnS,ps.HOUSES))  # Total House & Heat Store Positive Shed
+sum(sum(value.(S.ex.m[:qHShedN]["$(hs)",:]).data) for hs in union(ps.HnS,ps.HOUSES))  # Total House & Heat Store Negative Shed
+sum(sum(value.(S.ex.m[:gShed]["$r",:]).data) for r in ps.R)  # Total Renewables Shed
+sum(sum(value.(S.ex.m[:dShed]["$d",:]).data) for d in ps.D)  # Total Demand Shed
 
-sum(sum(value.(S.ex.m[:pHShedP]["$(hs)",:]).data) for hs in union(ps.HnS,ps.HOUSES))
+##### CREATE EXCEL FILE CONTAINING RESULTS
 include("OREIA3_2017/rp_invest.jl")
 
+######## CREATE PLOTS
+include("OREIA3_2017/result_plots.jl")
 
-B.hist.T[B.hist.k,3]
 
-B.temp.x # get final investment values --- can also use S.temp.x

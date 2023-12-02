@@ -21,8 +21,8 @@ function SP!(m::JuMP.Model,ps,pp)::JuMP.Model
     @variable(m,  qH[ps.HnS,ps.H]>= 0);        #ENERGY IN THE HEAT STORE [GWh]
     @variable(m,  qHS[ps.HOUSES,ps.H]>= 0);      #ENERGY IN THE HOUSES
     @variable(m,  tInt[ps.HOUSES,ps.H]);        #TEMP IN THE HOUSES [GWh]
-    @variable(m, pHShedP[union(ps.HOUSES,ps.HnS),ps.H]>=0);      #Power flexibility for heatstores positive (to keep it always feasible)
-    @variable(m, pHShedN[union(ps.HOUSES,ps.HnS),ps.H]>=0);       #Power flexibility for heatstores neg (to keep it always feasible)
+    @variable(m, qHShedP[union(ps.HOUSES,ps.HnS),ps.H]>=0);      #Power flexibility for heatstores positive (to keep it always feasible)
+    @variable(m, qHShedN[union(ps.HOUSES,ps.HnS),ps.H]>=0);       #Power flexibility for heatstores neg (to keep it always feasible)
 
     # - Line / Bus variables
     @variable(m, pL[ps.L,ps.H]);           #power flow into line l [GW]
@@ -65,7 +65,7 @@ function SP!(m::JuMP.Model,ps,pp)::JuMP.Model
     ##      SHED / CURTAIL COSTS  - PER PERIOD = Load shed + Generation curtailment [T£/period]
     @expression(m,Sh_Cost[h in ps.H], sum(gShed[r,h]*(pp.ccurt[r]) for r in ps.R) + 
                                        sum(dShed[d,h]*pp.cs[d] for d in ps.D) +
-                                       sum((pHShedP[hs,h]+pHShedN[hs,h])*pp.ccurt[hs] for hs in union(ps.HOUSES,ps.HnS))
+                                       sum((qHShedP[hs,h]+qHShedN[hs,h])*pp.ccurt[hs] for hs in union(ps.HOUSES,ps.HnS))
                                        );
 
     @expression(m, c0,sum(sc[h]*(Var_Cost[h]+Sh_Cost[h]) for h in ps.H));
@@ -102,11 +102,11 @@ function SP!(m::JuMP.Model,ps,pp)::JuMP.Model
     # Heat balance for Heat Stores
     @expression(m, PLoss[hns in ps.HnS], pp.lambda[hns]*QMass[hns]);
     @constraint(m, c72[hns=ps.HnS], qH[hns,1] == QMass[hns]*pp.tmin[hns]);  # Set initial temperature of heat store to min temp
-    @constraint(m, c17[hns=ps.HnS,h=ps.H], qH[hns,next(h,pp.st,pp.ln)] == qH[hns,h] + pHShedP[hns,h] - pHShedN[hns,h] +  pp.ts[HS[h]]*(pp.text[hns][h]*PLoss[hns] - pp.lambda[hns]*qH[hns,h]
+    @constraint(m, c17[hns=ps.HnS,h=ps.H], qH[hns,next(h,pp.st,pp.ln)] == qH[hns,h] + qHShedP[hns,h] - qHShedN[hns,h] +  pp.ts[HS[h]]*(pp.text[hns][h]*PLoss[hns] - pp.lambda[hns]*qH[hns,h]
                                             + sum(pHL[hl,h] for hl in ps.HL if pp.hto[hl]==hns) - sum(pHL[hl,h] for hl in ps.HL if pp.hfm[hl]==hns)));
     
     # Heat balance for Houses
-    @constraint(m, c18[hs=ps.HOUSES,h=ps.H], qHS[hs,next(h,pp.st,pp.ln)]== qHS[hs,h] + pHShedP[hs,h] - pHShedN[hs,h] + pp.ts[HS[h]]*(pp.ploss[hs]*(pp.text[hs][h]-tInt[hs,h])
+    @constraint(m, c18[hs=ps.HOUSES,h=ps.H], qHS[hs,next(h,pp.st,pp.ln)]== qHS[hs,h] + qHShedP[hs,h] - qHShedN[hs,h] + pp.ts[HS[h]]*(pp.ploss[hs]*(pp.text[hs][h]-tInt[hs,h])
                                             + sum(pHL[hl,h] for hl in ps.HL if pp.hto[hl]==hs) - sum(pHL[hl,h] for hl in ps.HL if pp.hfm[hl]==hs)));
 
 
@@ -268,31 +268,34 @@ function Undecomposed!(m,ms,mp,lT)
     @variable(m, qB[ms.I,ps.EnS,ps.H]>=0);          #energy in store
 
     # - Heat store variables
-    @variable(m,  pH_in[ms.I,ps.HS,ps.H]>=0);         #POWER INTO OF HEAT STORE (Increasing) [GW]
-    @variable(m,  pH_out[ms.I,ps.HS,ps.H]>= 0);    #POWER OUT OF HEAT STORE (Removing) [GW]
-    @variable(m,  qH[ms.I,ps.HS,ps.H]>= 0);        #ENERGY IN THE HEAT STORE [GWh]
-    @variable(m,  tInt[ms.I,ps.HS,ps.H]);          #TEMP IN THE HEAT STORE [GWh]
-    @variable(m, pHShedP[ms.I,ps.HS,ps.H]>=0);      #Power flexibility for heatstores positive (to keep it always feasible)
-    @variable(m, pHShedN[ms.I,ps.HS,ps.H]>=0);       #Power flexibility for heatstores neg (to keep it always feasible)
+    @variable(m,  pH_heat[ms.I,ps.HP,ps.H]>=0);         #POWER INTO OF HEAT STORE (Increasing) [GW]
+    @variable(m,  qH[ms.I,ps.HnS,ps.H]>= 0);        #ENERGY IN THE HEAT STORE [GWh]
+    @variable(m,  qHS[ms.I,ps.HOUSES,ps.H]>= 0);      #ENERGY IN THE HOUSES
+    @variable(m,  tInt[ms.I,ps.HOUSES,ps.H]);          #TEMP IN THE HEAT STORE [GWh]
+    @variable(m, qHShedP[ms.I,union(ps.HOUSES,ps.HnS),ps.H]>=0);      #Power flexibility for heatstores positive (to keep it always feasible)
+    @variable(m, qHShedN[ms.I,union(ps.HOUSES,ps.HnS),ps.H]>=0);       #Power flexibility for heatstores neg (to keep it always feasible)
 
 
     # - Line / Bus variables
     @variable(m, pL[ms.I,ps.L,ps.H]);           #power flow into line l [GW]
     @variable(m, delta[ms.I,ps.B,ps.H]);        #voltage angle [rad]
-
+    @variable(m, pHL[ms.I,ps.HL,ps.H]>=0);         #power flow into heat line hl
 
     # - Shed/Curtail variables
     @variable(m, gShed[ms.I,ps.R,ps.H]>= 0);    #renewable shed at period t
     @variable(m, dShed[ms.I,ps.D,ps.H]>= 0);    #demand shed at period t
 
-    
+
     #### Investment set variables
     @variable(m,pub[ms.I,ps.T]);             #upper bounds for thermal
     @variable(m,rub[ms.I,ps.R]);             #renewable scaling
     @variable(m,sub[ms.I,ps.ES]);            #upper bounds for stores (electric) - power
     @variable(m,eub[ms.I,ps.EnS]);            #upper bounds for stores (electric) - energy
-    @variable(m,hub[ms.I,ps.HS]);            #upper bounds for heat stores - power
+    @variable(m,hub[ms.I,ps.HP]);            #upper bounds for heat pumps - power
+    @variable(m, QMass[ms.I,ps.HnS]);           #QMass of TES
     @variable(m,lub[ms.I,ps.L]);             #thermal limits on lines
+    @variable(m,hlub[ms.I,ps.HL]>= 0);           #thermal upper bound on Heat Lines
+
 
     @variable(m,co2l[ms.I]);                  #CO2 level (passed from MP)
     @variable(m,sdm[ms.I]);                  #Demand scaling (passed from MP)
@@ -303,22 +306,22 @@ function Undecomposed!(m,ms,mp,lT)
     # - Cost gathering expression -
 
     ##      VARIABLE COSTS (MOSTLY OPERATION) - PER PERIOD = VARIABLE O&M + Fuel Costs without CO2 Tax [T£/period]
-    @expression(m,Var_Cost[i in ms.I,h in ps.H], sum(pG[i,g,h]*(pp.cvg[g]+pp.fc[g]/pp.eta[g]) for g in ps.T) + 
-                                       sum(pR[i,r,h]*pp.cvg[r] for r in ps.R) +
-                                       sum(pS_in[i,s,h]*pp.cvg[s] for s in ps.ES) +
-                                       sum(pH_in[i,s,h]*pp.cvg[s] for s in ps.HS)
-                                       );
+    @expression(m,Var_Cost[i in ms.I, h in ps.H], sum(pG[i,g,h]*(pp.cvg[g]+pp.fc[g]/pp.eta[g]) for g in ps.T) + 
+                                                sum(pR[i,r,h]*pp.cvg[r] for r in ps.R) +
+                                                sum(pS_in[i,s,h]*pp.cvg[s] for s in ps.ES) +
+                                                sum(pH_heat[i,s,h]*pp.cvg[s] for s in ps.HP)
+                                                );
+
 
     ##      SHED / CURTAIL COSTS  - PER PERIOD = Load shed + Generation curtailment [T£/period]
-    @expression(m,Sh_Cost[i in ms.I,h in ps.H], sum(gShed[i,r,h]*(pp.ccurt[r]) for r in ps.R) + 
-                                       sum(dShed[i,d,h]*pp.cs[d] for d in ps.D) +
-                                       sum((pHShedP[i,hs,h]+pHShedN[i,hs,h])*pp.ccurt[hs] for hs in ps.HS)
-                                       );
+    @expression(m,Sh_Cost[i in ms.I, h in ps.H], sum(gShed[i,r,h]*(pp.ccurt[r]) for r in ps.R) + 
+                                                sum(dShed[i,d,h]*pp.cs[d] for d in ps.D) +
+                                                sum((qHShedP[i,hs,h]+qHShedN[i,hs,h])*pp.ccurt[hs] for hs in union(ps.HOUSES,ps.HnS))
+                                                );    
 
     @expression(m, c0[i in ms.I],sum(sc[h]*(Var_Cost[i,h]+Sh_Cost[i,h]) for h in ps.H))
 
     # */ -- Objective function (will later be rewritten) ---------------------------------------------- /* #
-
 
     # - Proper system constraints -
     # */ ------------ conventional generator limits+ramping limits ------- /* #
@@ -329,42 +332,58 @@ function Undecomposed!(m,ms,mp,lT)
     @constraint(m, c03[i=ms.I, b=ps.ES, h=ps.H], pS_in[i,b,h]<=sub[i,b]);   # charging power limits
     @constraint(m, c04[i=ms.I, b=ps.ES, h=ps.H], pS_out[i,b,h]<=sub[i,b]);   # discharging power limits for electric store
 
-    @constraint(m, c05[i=ms.I,b=ps.HS, h=ps.H], pH_in[i,b,h]<=hub[i,b]);   # charging power limits
-    @constraint(m, c06[i=ms.I,b=ps.HS, h=ps.H], pH_out[i,b,h]<=hub[i,b]);   # discharging power limits for electric store
+    @constraint(m, c05[i=ms.I,b=ps.HP, h=ps.H], pH_heat[i,b,h]<=hub[i,b]);   # charging power limits
 
-    @constraint(m, c11[i=ms.I,b=ps.EnS, h=ps.H], qB[i,b,next(h,pp.st,pp.ln)] - qB[i,b,h] == pp.ts[HS[h]]*(pp.eta[pp.lp[b]]*pS_in[i,pp.lp[b],h] - pS_out[i,pp.lp[b],h])) # storage energy inventory for electric
+    @constraint(m, c06[i=ms.I,b=ps.EnS, h=ps.H], qB[i,b,next(h,pp.st,pp.ln)] - qB[i,b,h] == pp.ts[HS[h]]*(pp.eta[pp.lp[b]]*pS_in[i,pp.lp[b],h] - pS_out[i,pp.lp[b],h])) # storage energy inventory for electric
 
     @constraint(m,c07[i=ms.I,r=ps.R, h=ps.H],pR[i,r,h]==rub[i,r]/pp.hc[r]*pp.pr[r][h]);
 
 
-    # */ ------------- heat store constraints ---------------------- /* #
-    @constraint(m, c12[i=ms.I, hs=ps.HS, h=ps.H], tInt[i,hs,h] == qH[i,hs,h]/pp.qmass[hs]);
-    @constraint(m, c13[i=ms.I, hs=ps.HS, h=ps.H], tInt[i,hs,h] >= pp.tmin[hs]);
-    @constraint(m, c14[i=ms.I, hs=ps.HS, h=ps.H], tInt[i,hs,h] <= pp.tmax[hs]);
+    # */ ------------- heat store & house constraints ---------------------- /* #
+    @constraint(m, c08[i=ms.I, hs=ps.HOUSES, h=ps.H], tInt[i,hs,h] == qHS[i,hs,h]/pp.qmass[hs]);
+    @constraint(m, c09[i=ms.I, hs=ps.HOUSES, h=ps.H], tInt[i,hs,h] >= pp.tmin[hs]);
+    @constraint(m, c10[i=ms.I, hs=ps.HOUSES, h=ps.H], tInt[i,hs,h] <= pp.tmax[hs]);
 
-    # # */ ---------- heat storage balance PWC ----------------- /* #
-    @expression(m, lambda[hs=ps.HS],pp.ploss[hs]/pp.qmass[hs]);
+    @constraint(m, c11[i=ms.I, b=ps.HnS,h=ps.H], qH[i,b,h] <= QMass[i,b]*(pp.tmax[b]));   # Upper bound for energy in TES
+    @constraint(m, c12[i=ms.I, b=ps.HnS,h=ps.H], qH[i,b,h] >= QMass[i,b]*(pp.tmin[b]));   # Lower bound for energy in TES
+    @constraint(m, c13[i=ms.I, b=ps.HP, h=ps.H], pH_heat[i,b,h]<=hub[i,b]);   # charging power limits
 
-    @constraint(m,c16[i=ms.I,b=ps.B,hs=ps.HS_B[b],h=ps.H], qH[i,hs,next(h,pp.st,pp.ln)]==exp(-lambda[hs]*pp.ts[HS[h]])*qH[i,hs,h]+
-        (1-exp(-lambda[hs]*pp.ts[HS[h]]))/lambda[hs]*(pHShedP[i,hs,h]-pHShedN[i,hs,h]+pp.eta[hs]*pH_in[i,hs,h]-pH_out[i,hs,h]+pp.ploss[hs]*pp.text[b][h]))
+
+    # # */ ------ Heat Node Balance Constraint ------ /* #
+    @constraint(m, c14[i=ms.I, hn=ps.HN, h=ps.H], 
+    sum(pH_heat[i,hp,h]*pp.eta[hp] for hp in ps.HP if pp.hDeliv[hp]==hn) == sum(pHL[i,hl,h] for hl in ps.HL if pp.hfm[hl]==hn));
+
+    # */ ------ Heat Store & House Energy balance Constraint ------ /* #
+    # Heat balance for Heat Stores
+    @expression(m, PLoss[i in ms.I, hns in ps.HnS], pp.lambda[hns]*QMass[i,hns]);
+    @constraint(m, c15[i=ms.I,hns=ps.HnS], qH[i,hns,1] == QMass[i,hns]*pp.tmin[hns]);  # Set initial temperature of heat store to min temp
+    @constraint(m, c16[i=ms.I,hns=ps.HnS,h=ps.H], qH[i,hns,next(h,pp.st,pp.ln)] == qH[i,hns,h] + qHShedP[i,hns,h] - qHShedN[i,hns,h] +  pp.ts[HS[h]]*(pp.text[hns][h]*PLoss[i,hns] - pp.lambda[hns]*qH[i,hns,h]
+                                        + sum(pHL[i,hl,h] for hl in ps.HL if pp.hto[hl]==hns) - sum(pHL[i,hl,h] for hl in ps.HL if pp.hfm[hl]==hns)));
+
+    # Heat balance for Houses
+    @constraint(m, c17[i=ms.I,hs=ps.HOUSES,h=ps.H], qHS[i,hs,next(h,pp.st,pp.ln)]== qHS[i,hs,h] + qHShedP[i,hs,h] - qHShedN[i,hs,h] + pp.ts[HS[h]]*(pp.ploss[hs]*(pp.text[hs][h]-tInt[i,hs,h])
+                                        + sum(pHL[i,hl,h] for hl in ps.HL if pp.hto[hl]==hs) - sum(pHL[i,hl,h] for hl in ps.HL if pp.hfm[hl]==hs)));
+
+
 
     # */ -------------------- KCL ----------------------- /* #
     @constraint(m, c18[i=ms.I,b=ps.B,h=ps.H], sum(pG[i,g,h] for g in ps.T_B[b]) + sum(pR[i,r,h] for r in ps.R_B[b])  +
     sum(pL[i,l,h] for l in ps.L_to[b]) - sum(pL[i,l,h] for l in ps.L_fm[b]) + sum(dShed[i,d,h] for d in ps.D_B[b]) + sum(pS_out[i,b,h] for b in ps.ES_B[b])
-     == sdm[i]*sum(pp.pd[d][h] for d in ps.D_B[b]) + sum(gShed[i,r,h] for r in ps.R_B[b]) + sum(pS_in[i,s,h] for s in ps.ES_B[b]) + sum(pH_in[i,hs,h] for hs in ps.HS_B[b]))
-
- 
+     == sdm[i]*sum(pp.pd[d][h] for d in ps.D_B[b]) + sum(gShed[i,r,h] for r in ps.R_B[b]) + sum(pS_in[i,s,h] for s in ps.ES_B[b]) + sum(pH_heat[i,hp,h] for hp in ps.HP_B[b]))
 
     # */ -------------------- KVL ----------------------- /* #
-    @constraint(m,c17[i=ms.I,l=ps.L,h=ps.H],pL[i,l,h]==1/pp.imp[l]*(delta[i,pp.to[l],h]-delta[i,pp.fm[l],h]));
+    @constraint(m,c19[i=ms.I,l=ps.L,h=ps.H],pL[i,l,h]==1/pp.imp[l]*(delta[i,pp.to[l],h]-delta[i,pp.fm[l],h]));
     
     # */ -------------- LINE LIMITS --------------------- /* #
-    @constraint(m, c19[i=ms.I,l=ps.L,h=ps.H], pL[i,l,h] <=  lub[i,l]);
-    @constraint(m, c20[i=ms.I,l=ps.L,h=ps.H], pL[i,l,h] >= -lub[i,l]);
+    @constraint(m, c20[i=ms.I,l=ps.L,h=ps.H], pL[i,l,h] <=  lub[i,l]);
+    @constraint(m, c21[i=ms.I,l=ps.L,h=ps.H], pL[i,l,h] >= -lub[i,l]);
+
+    # */ -------------- HEAT LINE LIMITS ---------------- /* #
+    @constraint(m, c22[i=ms.I,hl=ps.HL,h=ps.H], pHL[i,hl,h] <=  hlub[i,hl]);
 
     # */ ----------------------- CO2 budget ------------------------ /* #
     @expression(m, cco[i=ms.I], sum(sum(pp.eg[g]/pp.eta[g]*pG[i,g,h] for g in ps.T)*sc[h] for h in ps.H))      # compute cost dependent on CO₂ level
-    @constraint(m, c21[i=ms.I], cco[i]<=co2l[i]);
+    @constraint(m, c23[i=ms.I], cco[i]<=co2l[i]);
 
 
     #LINKING PART
@@ -376,9 +395,11 @@ function Undecomposed!(m,ms,mp,lT)
     @constraint(m,csr_pub[i in ms.I,g in ps.T], pC[op2inv[g],i]==pub[i,g]);
     @constraint(m,csr_sub[i in ms.I,s in ps.ES], pC[op2inv[s],i]==sub[i,s]);
     @constraint(m,csr_eub[i in ms.I,s in ps.EnS], pC[op2inv[s],i]==eub[i,s]);
-    @constraint(m,csr_hub[i in ms.I,s in ps.HS], pC[op2inv[s],i]==hub[i,s]);
+    @constraint(m,csr_hub[i in ms.I,s in ps.HP], pC[op2inv[s],i]==hub[i,s]);
     @constraint(m,csr_lub[i in ms.I,l in ps.L], pC[op2inv[l],i]==lub[i,l]);
     @constraint(m,csr_rub[i in ms.I,r in ps.R], pC[op2inv[r],i]==rub[i,r]);
+    @constraint(m,csr_QMass[i in ms.I,hns in ps.HnS], pC[op2inv[hns],i]==QMass[i,hns]);
+    @constraint(m,csr_hlub[i in ms.I,hl in ps.HL], pC[op2inv[hl],i]==hlub[i,hl]);
     @constraint(m,csr_co2l[i in ms.I], co2l[i]==mp.co2lim[i]);
     @constraint(m,csr_dsc[i in ms.I], sdm[i]==-1.0*mp.dsc[i]);
 
