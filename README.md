@@ -1,4 +1,4 @@
-# University of Edinburgh Master's Dissertation Optimization Model
+# University of Edinburgh Master's Dissertation - 'Modelling Interseasonal Energy Storage'
 
 ![UoE banner](assets/school-of-maths.png)
 
